@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>风水命理计算器</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;font-family:"PingFang SC","Helvetica Neue",sans-serif}
+body{background:#f5f7fa;padding:12px;color:#333}
+.container{max-width:500px;margin:0 auto}
+h1{text-align:center;font-size:20px;margin-bottom:12px;color:#222}
+.card{background:#fff;border-radius:12px;padding:16px;margin-bottom:12px;box-shadow:0 2px 8px #0002}
+label{display:block;margin:10px 0 4px;font-weight:bold}
+input,select{width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:16px}
+button{width:100%;padding:12px;background:#007aff;color:#fff;border:none;border-radius:8px;font-size:17px;font-weight:bold;margin-top:10px}
+.result{margin-top:12px;line-height:1.7}
+.result h3{color:#007aff;margin:10px 0 6px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.tip{color:#666;font-size:13px;margin-top:6px}
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>🌀 风水命理计算器</h1>
+
+  <div class="card">
+    <label>姓名</label>
+    <input id="name" placeholder="请输入姓名">
+
+    <label>性别</label>
+    <select id="gender">
+      <option value="male">男</option>
+      <option value="female">女</option>
+    </select>
+
+    <label>公历生日（日期）</label>
+    <input id="birthDate" type="date">
+
+    <label>出生时间（时辰）</label>
+    <select id="birthHour">
+      <option value="23-01">子时 23:00-01:00</option>
+      <option value="01-03">丑时 01:00-03:00</option>
+      <option value="03-05">寅时 03:00-05:00</option>
+      <option value="05-07">卯时 05:00-07:00</option>
+      <option value="07-09">辰时 07:00-09:00</option>
+      <option value="09-11">巳时 09:00-11:00</option>
+      <option value="11-13">午时 11:00-13:00</option>
+      <option value="13-15">未时 13:00-15:00</option>
+      <option value="15-17">申时 15:00-17:00</option>
+      <option value="17-19">酉时 17:00-19:00</option>
+      <option value="19-21">戌时 19:00-21:00</option>
+      <option value="21-23">亥时 21:00-23:00</option>
+    </select>
+
+    <label>当前所在地（城市）</label>
+    <input id="city" placeholder="例如：北京、上海、广州、深圳">
+
+    <button onclick="calc()">开始测算</button>
+  </div>
+
+  <div class="card result" id="res"></div>
+</div>
+
+<script>
+// 天干地支
+const gan = ["甲","乙","丙","丁","戊","己","庚","辛","壬","癸"];
+const zhi = ["子","丑","寅","卯","辰","巳","午","未","申","酉","戌","亥"];
+const wuxing = {
+ 甲:"木",乙:"木",丙:"火",丁:"火",
+ 戊:"土",己:"土",庚:"金",辛:"金",
+ 壬:"水",癸:"水",
+ 子:"水",丑:"土",寅:"木",卯:"木",
+ 辰:"土",巳:"火",午:"火",未:"土",
+ 申:"金",酉:"金",戌:"土",亥:"水"
+};
+
+// 简易干支年（仅1924-2060）
+function getYearGZ(y){
+  const start=1924;
+  let i=(y-start)%60;
+  if(i<0)i+=60;
+  return {gan:gan[i%10],zhi:zhi[i%12]};
+}
+
+// 简易月干（按年干五虎遁，月支寅=正月）
+function getMonthGZ(y,m){
+  const g = getYearGZ(y).gan;
+  let gi = gan.indexOf(g);
+  // 五虎遁：甲己丙作首，乙庚戊为头…
+  let first;
+  if(["甲","己"].includes(g)) first="丙";
+  else if(["乙","庚"].includes(g)) first="戊";
+  else if(["丙","辛"].includes(g)) first="庚";
+  else if(["丁","壬"].includes(g)) first="壬";
+  else first="甲"; // 戊癸
+  let mi = gan.indexOf(first)+(m-1);
+  return {gan:gan[mi%10],zhi:zhi[(m+1)%12]};
+}
+
+// 简易日干（用固定偏移，仅做演示，非高精度万年历）
+function getDayGZ(y,m,d){
+  // 近似偏移（2000-01-01=甲子日附近，演示用）
+  let base=Date.UTC(2000,0,1);
+  let now=Date.UTC(y,m-1,d);
+  let diff=Math.floor((now-base)/(1000*60*60*24));
+  let i=(diff+0)%60; // 偏移可微调，这里仅示意
+  return {gan:gan[i%10],zhi:zhi[i%12]};
+}
+
+// 时干（五鼠遁）
+function getHourGZ(dayGan,h){
+  let hi;
+  if(h>=23||h<1) hi=0;
+  else if(h<3) hi=1;
+  else if(h<5) hi=2;
+  else if(h<7) hi=3;
+  else if(h<9) hi=4;
+  else if(h<11) hi=5;
+  else if(h<13) hi=6;
+  else if(h<15) hi=7;
+  else if(h<17) hi=8;
+  else if(h<19) hi=9;
+  else if(h<21) hi=10;
+  else hi=11;
+
+  let di=gan.indexOf(dayGan);
+  let first;
+  if(["甲","己"].includes(dayGan)) first="甲";
+  else if(["乙","庚"].includes(dayGan)) first="丙";
+  else if(["丙","辛"].includes(dayGan)) first="戊";
+  else if(["丁","壬"].includes(dayGan)) first="庚";
+  else first="壬";
+  let mi=gan.indexOf(first)+hi;
+  return {gan:gan[mi%10],zhi:zhi[hi]};
+}
+
+// 命卦（东四命/西四命）
+function mingGua(y,gender){
+  let n=y%100;
+  let num;
+  if(gender==="male") num=(100-n)%9;
+  else num=(n-4)%9;
+  if(num<=0) num+=9;
+  let gua="",type="";
+  if([1,3,4,9].includes(num)){
+    type="东四命";
+    if(num===1) gua="坎水";
+    if(num===3) gua="震木";
+    if(num===4) gua="巽木";
+    if(num===9) gua="离火";
+  }else{
+    type="西四命";
+    if(num===2) gua="坤土";
+    if(num===5) gua="中土（女坤/男艮）";
+    if(num===6) gua="乾金";
+    if(num===7) gua="兑金";
+    if(num===8) gua="艮土";
+  }
+  return {num,gua,type};
+}
+
+// 五行统计
+function wuxingCount(gzArr){
+  let cnt={木:0,火:0,土:0,金:0,水:0};
+  gzArr.forEach(x=>{
+    cnt[wuxing[x.gan]]++;
+    cnt[wuxing[x.zhi]]++;
+  });
+  return cnt;
+}
+
+// 主计算
+function calc(){
+  const name=document.getElementById("name").value||"朋友";
+  const gender=document.getElementById("gender").value;
+  const birthDate=document.getElementById("birthDate").value;
+  const birthHour=document.getElementById("birthHour").value;
+  const city=document.getElementById("city").value||"未知城市";
+  if(!birthDate)return alert("请选择生日");
+
+  let [y,m,d]=birthDate.split("-").map(Number);
+  let h=parseInt(birthHour.split("-")[0]);
+
+  // 四柱
+  const yearGZ=getYearGZ(y);
+  const monthGZ=getMonthGZ(y,m);
+  const dayGZ=getDayGZ(y,m,d);
+  const hourGZ=getHourGZ(dayGZ.gan,h);
+
+  const four=[yearGZ,monthGZ,dayGZ,hourGZ];
+  const cnt=wuxingCount(four);
+  // 找最强/最弱
+  let maxW="木",minW="木";
+  let maxV=0,minV=99;
+  for(let k in cnt){
+    if(cnt[k]>maxV){maxV=cnt[k];maxW=k;}
+    if(cnt[k]<minV){minV=cnt[k];minW=k;}
+  }
+  let xiji=minW; // 简易：缺什么补什么
+  let jiwei=maxW;
+
+  // 命卦
+  const mg=mingGua(y,gender);
+
+  // 方位吉凶（简易）
+  let goodDirs=[],badDirs=[];
+  if(mg.type==="东四命"){
+    goodDirs=["东","东南","南","北"];
+    badDirs=["西","西南","西北","东北"];
+  }else{
+    goodDirs=["西","西南","西北","东北"];
+    badDirs=["东","东南","南","北"];
+  }
+
+  // 当日运势（简易：日干五行）
+  const dayWuxing=wuxing[dayGZ.gan];
+  let dayLuck="";
+  if(dayWuxing==="木")dayLuck="生机向上，宜学习、拓展人际";
+  if(dayWuxing==="火")dayLuck="热情积极，宜谈判、表现、对外沟通";
+  if(dayWuxing==="土")dayLuck="稳重务实，宜收尾、理财、不动产相关";
+  if(dayWuxing==="金")dayLuck="理性果断，宜决策、签约、整理计划";
+  if(dayWuxing==="水")dayLuck="灵感强，宜思考、文案、人际协调";
+
+  // 输出
+  let html=`<h3>📌 基本信息</h3>`;
+  html+=`姓名：${name}<br>性别：${gender==="male"?"男":"女"}<br>生日：${birthDate} ${birthHour}<br>所在地：${city}<br>`;
+
+  html+=`<h3>🗓 生辰八字</h3>`;
+  html+=`年柱：${yearGZ.gan}${yearGZ.zhi}（${wuxing[yearGZ.gan]}${wuxing[yearGZ.zhi]}）<br>`;
+  html+=`月柱：${monthGZ.gan}${monthGZ.zhi}（${wuxing[monthGZ.gan]}${wuxing[monthGZ.zhi]}）<br>`;
+  html+=`日柱：${dayGZ.gan}${dayGZ.zhi}（${wuxing[dayGZ.gan]}${wuxing[dayGZ.zhi]}）<br>`;
+  html+=`时柱：${hourGZ.gan}${hourGZ.zhi}（${wuxing[hourGZ.gan]}${wuxing[hourGZ.zhi]}）<br>`;
+
+  html+=`<h3>🔮 五行强弱</h3>`;
+  html+=`木${cnt.木} 火${cnt.火} 土${cnt.土} 金${cnt.金} 水${cnt.水}<br>`;
+  html+=`偏旺：${jiwei} &nbsp;&nbsp;偏弱/喜用：${xiji}<br>`;
+  html+=`<span class="tip">（喜用建议：多用${xiji}色、接触${xiji}类元素调节平衡）</span><br>`;
+
+  html+=`<h3>🏠 命卦与方位风水</h3>`;
+  html+=`命卦：${mg.num}号卦 · ${mg.gua} · ${mg.type}<br>`;
+  html+=`✅ 吉利方位：${goodDirs.join("、")}<br>`;
+  html+=`❌ 不利方位：${badDirs.join("、")}<br>`;
+  html+=`<span class="tip">（床头/办公位优先朝${goodDirs[0]}；避免正对${badDirs[0]}）</span><br>`;
+
+  html+=`<h3>💰 财位/事业/健康位（简易）</h3>`;
+  html+=`财位：${mg.type==="东四命"?"东南/南":"西/西北"}<br>`;
+  html+=`事业位：${mg.type==="东四命"?"东/北":"东北/西南"}<br>`;
+  html+=`健康位：${mg.type==="东四命"?"北/东南":"西/东北"}<br>`;
+
+  html+=`<h3>☀️ 今日时段运势</h3>`;
+  html+=`日干五行：${dayWuxing}<br>运势：${dayLuck}<br>`;
+
+  html+=`<div class="tip">本工具为传统命理娱乐测算，不构成决策依据；命运仍以选择与努力为主。</div>`;
+
+  document.getElementById("res").innerHTML=html;
+}
+</script>
+
+</body>
+</html>
